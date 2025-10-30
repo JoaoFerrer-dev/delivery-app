@@ -88,35 +88,61 @@ if(isset($_GET['logout'])) {
                 </div>
 
             <?php else: ?>
-                <!-- FORMULÁRIO DE CADASTRO -->
-                <div class="form-section">
-                    <h2>Criar Nova Conta</h2>
-                    <form method="POST">
-                        <div class="form-group">
-                            <input type="text" name="nome" placeholder="Seu nome completo" required>
-                        </div>
-                        <div class="form-group">
-                            <input type="email" name="email" placeholder="Seu melhor email" required>
-                        </div>
-                        <div class="form-group">
-                            <input type="password" name="senha" placeholder="Crie uma senha" required minlength="6">
-                        </div>
-                        <div class="form-group">
-                            <label>Tipo de Conta:</label>
-                            <select name="tipo" required>
-                                <option value="cliente">👤 Cliente</option>
-                                <option value="entregador">🚗 Entregador</option>
-                                <option value="restaurante">🍽️ Restaurante</option>
-                            </select>
-                        </div>
-                        <button type="submit" name="cadastrar" class="btn btn-success btn-block">
-                            📝 Criar Conta
-                        </button>
-                    </form>
-                    <div class="switch-form">
-                        <p>Já tem conta? <a href="?acao=login">Faça login aqui</a></p>
-                    </div>
-                </div>
+                <!-- No formulário de cadastro, adicionar campo de nicho para restaurantes: -->
+<?php if($mostrarCadastro): ?>
+    <div class="form-section">
+        <h2>Criar Nova Conta</h2>
+        <form method="POST">
+            <div class="form-group">
+                <input type="text" name="nome" placeholder="Seu nome completo" required>
+            </div>
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Seu melhor email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" name="senha" placeholder="Crie uma senha" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Conta:</label>
+                <select name="tipo" id="tipoConta" required onchange="toggleNichoField()">
+                    <option value="cliente">👤 Cliente</option>
+                    <option value="entregador">🚗 Entregador</option>
+                    <option value="restaurante">🍽️ Restaurante</option>
+                </select>
+            </div>
+            
+            <!-- Campo de nicho (apenas para restaurantes) -->
+            <div class="form-group" id="nichoField" style="display: none;">
+                <label>Nicho do Restaurante:</label>
+                <select name="nicho">
+                    <option value="pizzaria">🍕 Pizzaria</option>
+                    <option value="hamburgueria">🍔 Hamburgueria</option>
+                    <option value="sorveteria">🍦 Sorveteria</option>
+                    <option value="lanchonete">🥪 Lanchonete</option>
+                    <option value="outro">🍽️ Outro</option>
+                </select>
+            </div>
+            
+            <button type="submit" name="cadastrar" class="btn btn-success btn-block">
+                📝 Criar Conta
+            </button>
+        </form>
+    </div>
+<?php endif; ?>
+
+<script>
+function toggleNichoField() {
+    const tipoConta = document.getElementById('tipoConta').value;
+    const nichoField = document.getElementById('nichoField');
+    
+    if(tipoConta === 'restaurante') {
+        nichoField.style.display = 'block';
+    } else {
+        nichoField.style.display = 'none';
+    }
+}
+</script>
+                
             <?php endif; ?>
 
             <div class="demo-accounts">

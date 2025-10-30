@@ -4,12 +4,29 @@ require_once 'database.php';
 class Pedido {
     private $conn;
     private $table_name = "pedidos";
+    private $itens_table = "itens_pedido";
+    private $cardapio_table = "cardapio";
 
     public function __construct() {
         $database = new Database();
         $this->conn = $database->getConnection();
     }
 
+    // MÉTODO CORRIGIDO - Removida referência à coluna nicho
+    public function listarPedidosPorCliente($cliente_id) {
+        $query = "SELECT p.*, r.nome as restaurante_nome
+                  FROM " . $this->table_name . " p
+                  JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
+                  WHERE p.cliente_id = :cliente_id
+                  ORDER BY p.data_pedido DESC";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":cliente_id", $cliente_id);
+        $stmt->execute();
+        return $stmt;
+    }
+
+    // Resto dos métodos permanecem iguais...
     // SIMULAÇÃO DE MÚLTIPLOS PEDIDOS COM LAÇO
     public function simularMultiplosPedidos($quantidade, $cliente_id) {
         $pedidosCriados = 0;
@@ -85,6 +102,178 @@ class Pedido {
         echo "</div>";
 
         return $pedidosCriados;
+    }
+
+    // Criar pedido com código de entrega
+    public function criarPedido($cliente_id, $restaurante_id, $itens, $endereco_entrega, $observacoes = '') {
+        try {
+            $this->conn->beginTransaction();
+
+            // Calcular valor total
+            $valorTotal = 0;
+            foreach($itens as $item) {
+                $valorTotal += $item['preco'] * $item['quantidade'];
+            }
+
+            // Gerar código de entrega único
+            $codigo_entrega = $this->gerarCodigoEntrega();
+
+            // Inserir pedido
+            $query = "INSERT INTO " . $this->table_name . " 
+                     SET cliente_id=:cliente_id, restaurante_id=:restaurante_id, 
+                         valorTotal=:valorTotal, endereco_entrega=:endereco, 
+                         observacoes=:observacoes, codigo_entrega=:codigo_entrega, status='pendente'";
+
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(":cliente_id", $cliente_id);
+            $stmt->bindParam(":restaurante_id", $restaurante_id);
+            $stmt->bindParam(":valorTotal", $valorTotal);
+            $stmt->bindParam(":endereco", $endereco_entrega);
+            $stmt->bindParam(":observacoes", $observacoes);
+            $stmt->bindParam(":codigo_entrega", $codigo_entrega);
+
+            if(!$stmt->execute()) {
+                throw new Exception("Erro ao criar pedido");
+            }
+
+            $pedido_id = $this->conn->lastInsertId();
+
+            // Inserir itens do pedido
+            foreach($itens as $item) {
+                $query_item = "INSERT INTO " . $this->itens_table . " 
+                              SET pedido_id=:pedido_id, item_cardapio_id=:item_id, 
+                                  quantidade=:quantidade, precoUnitario=:preco, observacoes=:obs";
+
+                $stmt_item = $this->conn->prepare($query_item);
+                $stmt_item->bindParam(":pedido_id", $pedido_id);
+                $stmt_item->bindParam(":item_id", $item['item_id']);
+                $stmt_item->bindParam(":quantidade", $item['quantidade']);
+                $stmt_item->bindParam(":preco", $item['preco']);
+                $stmt_item->bindParam(":obs", $item['observacoes']);
+
+                if(!$stmt_item->execute()) {
+                    throw new Exception("Erro ao adicionar item ao pedido");
+                }
+            }
+
+            $this->conn->commit();
+            return [
+                'pedido_id' => $pedido_id,
+                'codigo_entrega' => $codigo_entrega
+            ];
+
+        } catch(Exception $e) {
+            $this->conn->rollBack();
+            return false;
+        }
+    }
+
+    // Gerar código de entrega único (6 caracteres)
+    private function gerarCodigoEntrega() {
+        $caracteres = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $codigo = '';
+        
+        do {
+            $codigo = '';
+            for ($i = 0; $i < 6; $i++) {
+                $codigo .= $caracteres[rand(0, strlen($caracteres) - 1)];
+            }
+            
+            // Verificar se o código já existe
+            $query = "SELECT idPedido FROM " . $this->table_name . " WHERE codigo_entrega = :codigo";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(":codigo", $codigo);
+            $stmt->execute();
+            
+        } while ($stmt->rowCount() > 0);
+        
+        return $codigo;
+    }
+
+    // Confirmar entrega com código
+    public function confirmarEntrega($pedido_id, $codigo_confirmacao, $entregador_id) {
+        $query = "UPDATE " . $this->table_name . " 
+                  SET status = 'entregue', codigo_confirmacao = :codigo, 
+                      entregador_id = :entregador_id, data_entrega = NOW()
+                  WHERE idPedido = :pedido_id AND codigo_entrega = :codigo";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":codigo", $codigo_confirmacao);
+        $stmt->bindParam(":entregador_id", $entregador_id);
+        $stmt->bindParam(":pedido_id", $pedido_id);
+
+        return $stmt->execute();
+    }
+
+    // Aceitar entrega (entregador)
+    public function aceitarEntrega($pedido_id, $entregador_id) {
+        $query = "UPDATE " . $this->table_name . " 
+                  SET entregador_id = :entregador_id, status = 'em_entrega'
+                  WHERE idPedido = :pedido_id AND status = 'pronto'";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":entregador_id", $entregador_id);
+        $stmt->bindParam(":pedido_id", $pedido_id);
+
+        return $stmt->execute();
+    }
+
+    // Obter detalhes do pedido
+    public function getPedido($pedido_id) {
+        $query = "SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
+                         u.nome as cliente_nome, u.email as cliente_email,
+                         e.nome as entregador_nome
+                  FROM " . $this->table_name . " p
+                  JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
+                  JOIN usuarios u ON p.cliente_id = u.idUsuario
+                  LEFT JOIN entregadores ent ON p.entregador_id = ent.idEntregador
+                  LEFT JOIN usuarios e ON ent.usuario_id = e.idUsuario
+                  WHERE p.idPedido = :pedido_id";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":pedido_id", $pedido_id);
+        $stmt->execute();
+        return $stmt->fetch();
+    }
+
+    // Obter itens do pedido
+    public function getItensPedido($pedido_id) {
+        $query = "SELECT ip.*, c.nome as item_nome, c.descricao as item_descricao
+                  FROM " . $this->itens_table . " ip
+                  JOIN " . $this->cardapio_table . " c ON ip.item_cardapio_id = c.idItem
+                  WHERE ip.pedido_id = :pedido_id";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":pedido_id", $pedido_id);
+        $stmt->execute();
+        return $stmt;
+    }
+
+    // Listar pedidos para entregadores
+    public function listarPedidosEntregador($entregador_id = null) {
+        if($entregador_id) {
+            $query = "SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
+                             u.nome as cliente_nome
+                      FROM " . $this->table_name . " p
+                      JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
+                      JOIN usuarios u ON p.cliente_id = u.idUsuario
+                      WHERE p.entregador_id = :entregador_id
+                      ORDER BY p.data_pedido DESC";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(":entregador_id", $entregador_id);
+        } else {
+            $query = "SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
+                             u.nome as cliente_nome
+                      FROM " . $this->table_name . " p
+                      JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
+                      JOIN usuarios u ON p.cliente_id = u.idUsuario
+                      WHERE p.status IN ('pronto', 'em_entrega')
+                      ORDER BY p.data_pedido DESC";
+            $stmt = $this->conn->prepare($query);
+        }
+        
+        $stmt->execute();
+        return $stmt;
     }
 
     // RECUPERAR E EXIBIR LISTA FINAL DE PEDIDOS PROCESSADOS
@@ -171,7 +360,7 @@ class Pedido {
 
     // EXIBIR PEDIDOS PARA ENTREGADORES
     public function exibirPedidosParaEntregadores() {
-        $query = "SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco, 
+        $query = "SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
                          u.nome as cliente_nome
                   FROM " . $this->table_name . " p
                   JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
@@ -247,40 +436,15 @@ class Pedido {
         return $stmt->rowCount();
     }
 
-    // Aceitar entrega
-    public function aceitarEntrega($pedido_id, $entregador_id) {
-        $query = "UPDATE " . $this->table_name . " 
-                  SET entregador_id = :entregador_id, status = 'em_entrega'
-                  WHERE idPedido = :pedido_id AND status = 'pronto'";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(":entregador_id", $entregador_id);
-        $stmt->bindParam(":pedido_id", $pedido_id);
-
-        return $stmt->execute();
-    }
-
-    // Finalizar entrega
-    public function finalizarEntrega($pedido_id) {
-        $query = "UPDATE " . $this->table_name . " 
-                  SET status = 'entregue'
-                  WHERE idPedido = :pedido_id AND status = 'em_entrega'";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(":pedido_id", $pedido_id);
-
-        return $stmt->execute();
-    }
-
-    public function listarPedidosPorCliente($cliente_id) {
+    // Listar pedidos disponíveis para entrega
+    public function listarPedidosDisponiveis() {
         $query = "SELECT p.*, r.nome as restaurante_nome 
                   FROM " . $this->table_name . " p
                   JOIN restaurantes r ON p.restaurante_id = r.idRestaurante
-                  WHERE p.cliente_id = :cliente_id
-                  ORDER BY p.data_pedido DESC";
+                  WHERE p.status = 'pronto' AND p.entregador_id IS NULL
+                  ORDER BY p.data_pedido ASC";
 
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(":cliente_id", $cliente_id);
         $stmt->execute();
         return $stmt;
     }

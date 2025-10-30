@@ -13,7 +13,7 @@ $usuario = $_SESSION['usuario'];
 $pedido = new Pedido();
 $userManager = new Usuario();
 
-// Estatísticas
+// Estatísticas - CORREÇÃO AQUI
 $total_pedidos = 0;
 if($usuario['tipo'] == 'cliente') {
     $stmt = $pedido->listarPedidosPorCliente($usuario['id']);
@@ -47,6 +47,10 @@ $usuarios = $userManager->listarUsuarios();
             <a href="pedidos.php" class="btn nav-btn">📦 Pedidos</a>
             <a href="restaurantes.php" class="btn nav-btn">🍽️ Restaurantes</a>
             <a href="simulacao_pedidos.php" class="btn nav-btn" style="background: #4caf50; color: white;">🎯 Simular Pedidos</a>
+            
+            <?php if($usuario['tipo'] == 'entregador'): ?>
+                <a href="confirmar_entrega.php" class="btn nav-btn" style="background: #2196f3; color: white;">✅ Confirmar Entrega</a>
+            <?php endif; ?>
         </div>
 
         <div class="stats">
@@ -57,19 +61,32 @@ $usuarios = $userManager->listarUsuarios();
                 <p><strong>Usuários Cadastrados:</strong> <?php echo $usuarios->rowCount(); ?></p>
             </div>
             
+            <?php if($usuario['tipo'] == 'cliente'): ?>
             <div class="stat-card" style="background: linear-gradient(135deg, #4caf50, #45a049);">
                 <h3>🎯 Nova Funcionalidade</h3>
-                <p><strong>Simulação de Pedidos</strong></p>
-                <p>Teste o sistema com múltiplos pedidos simultâneos</p>
-                <a href="simulacao_pedidos.php" class="btn" style="background: white; color: #4caf50; margin-top: 10px;">
-                    🚀 Testar Agora
+                <p><strong>Fazer Pedidos Reais</strong></p>
+                <p>Agora você pode fazer pedidos reais com cardápios!</p>
+                <a href="restaurantes.php" class="btn" style="background: white; color: #4caf50; margin-top: 10px;">
+                    🍽️ Fazer Pedido
                 </a>
             </div>
+            <?php endif; ?>
+            
+            <?php if($usuario['tipo'] == 'entregador'): ?>
+            <div class="stat-card" style="background: linear-gradient(135deg, #2196f3, #1976d2);">
+                <h3>🚗 Entregas</h3>
+                <p><strong>Entregas Disponíveis:</strong> <?php echo $total_pedidos; ?></p>
+                <p>Confirme entregas com código</p>
+                <a href="confirmar_entrega.php" class="btn" style="background: white; color: #2196f3; margin-top: 10px;">
+                    ✅ Confirmar Entrega
+                </a>
+            </div>
+            <?php endif; ?>
         </div>
 
         <?php if($usuario['tipo'] == 'cliente'): ?>
         <div class="card">
-            <h2>🎯 Simular Pedidos</h2>
+            <h2>🎯 Simular Pedidos (Teste)</h2>
             <form method="POST" action="pedidos.php">
                 <div class="form-group">
                     <label>Quantidade de Pedidos a Simular:</label>
@@ -79,6 +96,9 @@ $usuarios = $userManager->listarUsuarios();
                     🚀 Iniciar Simulação
                 </button>
             </form>
+            <p style="margin-top: 10px; color: #666;">
+                <small>💡 Experimente a nova <a href="simulacao_pedidos.php" style="color: #4caf50;">versão completa de simulação</a> ou <a href="restaurantes.php" style="color: #2196f3;">faça pedidos reais</a></small>
+            </p>
         </div>
         <?php endif; ?>
 
@@ -112,28 +132,64 @@ $usuarios = $userManager->listarUsuarios();
             <?php
             if($usuario['tipo'] == 'cliente') {
                 $stmt = $pedido->listarPedidosPorCliente($usuario['id']);
-            } else {
-                $stmt = $pedido->listarPedidosDisponiveis();
-            }
-            
-            if($stmt->rowCount() > 0) {
-                echo '<div class="pedidos-grid">';
-                while ($row = $stmt->fetch()) {
-                    echo '
-                    <div class="pedido-card">
-                        <div class="pedido-header">
-                            <strong>Pedido #' . $row['idPedido'] . '</strong>
-                            <span class="status status-' . $row['status'] . '">' . 
-                            ucfirst($row['status']) . '</span>
-                        </div>
-                        <p><strong>Restaurante:</strong> ' . $row['restaurante_nome'] . '</p>
-                        <p><strong>Valor:</strong> R$ ' . number_format($row['valorTotal'], 2, ',', '.') . '</p>
-                        <p><strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($row['data_pedido'])) . '</p>
-                    </div>';
+                
+                if($stmt->rowCount() > 0) {
+                    echo '<div class="pedidos-grid">';
+                    while ($row = $stmt->fetch()) {
+                        echo '
+                        <div class="pedido-card">
+                            <div class="pedido-header">
+                                <strong>Pedido #' . $row['idPedido'] . '</strong>
+                                <span class="status status-' . $row['status'] . '">' . 
+                                ucfirst($row['status']) . '</span>
+                            </div>
+                            <p><strong>Restaurante:</strong> ' . $row['restaurante_nome'] . '</p>
+                            <p><strong>Valor:</strong> R$ ' . number_format($row['valorTotal'], 2, ',', '.') . '</p>
+                            <p><strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($row['data_pedido'])) . '</p>';
+                        
+                        if($row['codigo_entrega']) {
+                            echo '<p><strong>Código:</strong> <code>' . $row['codigo_entrega'] . '</code></p>';
+                        }
+                        
+                        echo '</div>';
+                    }
+                    echo '</div>';
+                } else {
+                    echo '<p>Nenhum pedido encontrado. <a href="restaurantes.php">Faça seu primeiro pedido!</a></p>';
                 }
-                echo '</div>';
             } else {
-                echo '<p>Nenhum pedido encontrado.</p>';
+                // Para entregadores, mostrar pedidos disponíveis
+                $stmt = $pedido->listarPedidosDisponiveis();
+                
+                if($stmt->rowCount() > 0) {
+                    echo '<div class="pedidos-grid">';
+                    while ($row = $stmt->fetch()) {
+                        echo '
+                        <div class="pedido-card">
+                            <div class="pedido-header">
+                                <strong>Pedido #' . $row['idPedido'] . '</strong>
+                                <span class="status status-' . $row['status'] . '">' . 
+                                ucfirst($row['status']) . '</span>
+                            </div>
+                            <p><strong>Restaurante:</strong> ' . $row['restaurante_nome'] . '</p>
+                            <p><strong>Valor:</strong> R$ ' . number_format($row['valorTotal'], 2, ',', '.') . '</p>
+                            <p><strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($row['data_pedido'])) . '</p>';
+                        
+                        if($row['status'] == 'pronto') {
+                            echo '<form method="POST" action="pedidos.php" style="margin-top: 10px;">
+                                    <input type="hidden" name="pedido_id" value="' . $row['idPedido'] . '">
+                                    <button type="submit" name="aceitar_entrega" class="btn btn-success">
+                                        ✅ Aceitar Entrega
+                                    </button>
+                                  </form>';
+                        }
+                        
+                        echo '</div>';
+                    }
+                    echo '</div>';
+                } else {
+                    echo '<p>Nenhum pedido disponível para entrega no momento.</p>';
+                }
             }
             ?>
         </div>

@@ -25,8 +25,8 @@ class Usuario {
 
         if($stmt->rowCount() == 1) {
             $row = $stmt->fetch();
-            // Para demo, senha fixa - em produção usar password_verify()
-            if($senha == "senha123" || password_verify($senha, $row['senha'])) {
+            // Para demo, senha fixa. Em produção usar password_verify()
+            if($senha == "senha123") {
                 $this->idUsuario = $row['idUsuario'];
                 $this->nome = $row['nome'];
                 $this->email = $row['email'];
@@ -37,7 +37,7 @@ class Usuario {
         return false;
     }
 
-    public function cadastrar($nome, $email, $senha, $tipo = 'cliente') {
+    public function cadastrar($nome, $email, $senha, $tipo = 'cliente', $nicho = null) {
         // Verificar se email já existe
         if($this->emailExiste($email)) {
             return "Erro: Este email já está cadastrado.";
@@ -52,7 +52,7 @@ class Usuario {
         $nome = htmlspecialchars(strip_tags($nome));
         $email = htmlspecialchars(strip_tags($email));
         
-        // Hash da senha
+        // Hash da senha (em produção)
         $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
 
         $stmt->bindParam(":nome", $nome);
@@ -61,10 +61,25 @@ class Usuario {
         $stmt->bindParam(":tipo", $tipo);
 
         if($stmt->execute()) {
+            // Se for restaurante, cadastrar também na tabela restaurantes
+            if($tipo == 'restaurante' && $nicho) {
+                require_once 'Restaurante.php';
+                $restaurante = new Restaurante();
+                $restaurante->cadastrar($this->conn->lastInsertId(), $nome, 'Endereço a definir', '(00) 0000-0000', '00.000.000/0000-00', $nicho);
+            }
+            
             return "Sucesso: Cadastro realizado com sucesso!";
         } else {
             return "Erro: Não foi possível realizar o cadastro.";
         }
+    }
+
+    // MÉTODO QUE ESTAVA FALTANDO - Listar usuários
+    public function listarUsuarios() {
+        $query = "SELECT idUsuario, nome, email, tipo, created_at FROM " . $this->table_name . " ORDER BY created_at DESC";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt;
     }
 
     private function emailExiste($email) {
@@ -73,13 +88,6 @@ class Usuario {
         $stmt->bindParam(":email", $email);
         $stmt->execute();
         return $stmt->rowCount() > 0;
-    }
-
-    public function listarUsuarios() {
-        $query = "SELECT idUsuario, nome, email, tipo, created_at FROM " . $this->table_name . " ORDER BY created_at DESC";
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute();
-        return $stmt;
     }
 }
 ?>
