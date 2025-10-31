@@ -1,0 +1,217 @@
+-- Criar o banco de dados
+CREATE DATABASE IF NOT EXISTS `delivery_app` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `delivery_app`;
+
+-- Criar tabela de usuários
+CREATE TABLE `usuarios` (
+  `idUsuario` int(11) NOT NULL AUTO_INCREMENT,
+  `nome` varchar(100) NOT NULL,
+  `email` varchar(150) NOT NULL,
+  `senha` varchar(255) NOT NULL,
+  `tipo` enum('cliente','entregador','restaurante') NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`idUsuario`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de categorias
+CREATE TABLE `categorias` (
+  `idCategoria` int(11) NOT NULL AUTO_INCREMENT,
+  `nome` varchar(50) NOT NULL,
+  `nicho` varchar(50) NOT NULL,
+  PRIMARY KEY (`idCategoria`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de produtos predefinidos
+CREATE TABLE `produtos_predefinidos` (
+  `idProduto` int(11) NOT NULL AUTO_INCREMENT,
+  `categoria_id` int(11) DEFAULT NULL,
+  `nome` varchar(100) NOT NULL,
+  `descricao` text DEFAULT NULL,
+  `preco` decimal(10,2) NOT NULL,
+  `nicho` varchar(50) NOT NULL,
+  PRIMARY KEY (`idProduto`),
+  KEY `categoria_id` (`categoria_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de restaurantes
+CREATE TABLE `restaurantes` (
+  `idRestaurante` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario_id` int(11) DEFAULT NULL,
+  `nome` varchar(100) NOT NULL,
+  `endereco` text NOT NULL,
+  `telefone` varchar(20) DEFAULT NULL,
+  `cnpj` varchar(18) DEFAULT NULL,
+  `nicho` enum('pizzaria','hamburgueria','sorveteria','lanchonete','outro') DEFAULT 'outro',
+  PRIMARY KEY (`idRestaurante`),
+  UNIQUE KEY `cnpj` (`cnpj`),
+  KEY `usuario_id` (`usuario_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de entregadores
+CREATE TABLE `entregadores` (
+  `idEntregador` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario_id` int(11) DEFAULT NULL,
+  `veiculo` varchar(50) NOT NULL,
+  `status` enum('disponivel','ocupado','offline') DEFAULT 'disponivel',
+  `placa_veiculo` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`idEntregador`),
+  KEY `usuario_id` (`usuario_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de pratos
+CREATE TABLE `pratos` (
+  `idPrato` int(11) NOT NULL AUTO_INCREMENT,
+  `restaurante_id` int(11) DEFAULT NULL,
+  `nome` varchar(100) NOT NULL,
+  `descricao` text DEFAULT NULL,
+  `preco` decimal(10,2) NOT NULL,
+  `categoria` varchar(50) DEFAULT NULL,
+  `disponivel` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`idPrato`),
+  KEY `restaurante_id` (`restaurante_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de cardápio
+CREATE TABLE `cardapio` (
+  `idItem` int(11) NOT NULL AUTO_INCREMENT,
+  `restaurante_id` int(11) DEFAULT NULL,
+  `produto_id` int(11) DEFAULT NULL,
+  `nome` varchar(100) NOT NULL,
+  `descricao` text DEFAULT NULL,
+  `preco` decimal(10,2) NOT NULL,
+  `categoria` varchar(50) DEFAULT NULL,
+  `disponivel` tinyint(1) DEFAULT 1,
+  `is_predefinido` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`idItem`),
+  KEY `restaurante_id` (`restaurante_id`),
+  KEY `produto_id` (`produto_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de pedidos
+CREATE TABLE `pedidos` (
+  `idPedido` int(11) NOT NULL AUTO_INCREMENT,
+  `cliente_id` int(11) DEFAULT NULL,
+  `restaurante_id` int(11) DEFAULT NULL,
+  `entregador_id` int(11) DEFAULT NULL,
+  `data_pedido` timestamp NOT NULL DEFAULT current_timestamp(),
+  `valorTotal` decimal(10,2) NOT NULL,
+  `status` enum('pendente','confirmado','preparando','pronto','em_entrega','entregue','cancelado') DEFAULT 'pendente',
+  `endereco_entrega` text NOT NULL,
+  `observacoes` text DEFAULT NULL,
+  PRIMARY KEY (`idPedido`),
+  KEY `cliente_id` (`cliente_id`),
+  KEY `restaurante_id` (`restaurante_id`),
+  KEY `entregador_id` (`entregador_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de itens do pedido
+CREATE TABLE `itens_pedido` (
+  `idItem` int(11) NOT NULL AUTO_INCREMENT,
+  `pedido_id` int(11) DEFAULT NULL,
+  `prato_id` int(11) DEFAULT NULL,
+  `quantidade` int(11) NOT NULL,
+  `precoUnitario` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`idItem`),
+  KEY `pedido_id` (`pedido_id`),
+  KEY `prato_id` (`prato_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Criar tabela de avaliações
+CREATE TABLE `avaliacoes` (
+  `idAvaliacao` int(11) NOT NULL AUTO_INCREMENT,
+  `pedido_id` int(11) DEFAULT NULL,
+  `cliente_id` int(11) DEFAULT NULL,
+  `restaurante_id` int(11) DEFAULT NULL,
+  `nota` int(11) NOT NULL CHECK (`nota` >= 1 and `nota` <= 5),
+  `comentario` text DEFAULT NULL,
+  `data_avaliacao` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`idAvaliacao`),
+  KEY `pedido_id` (`pedido_id`),
+  KEY `cliente_id` (`cliente_id`),
+  KEY `restaurante_id` (`restaurante_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Adicionar constraints (chaves estrangeiras)
+ALTER TABLE `produtos_predefinidos`
+  ADD CONSTRAINT `produtos_predefinidos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`idCategoria`);
+
+ALTER TABLE `restaurantes`
+  ADD CONSTRAINT `restaurantes_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`idUsuario`);
+
+ALTER TABLE `entregadores`
+  ADD CONSTRAINT `entregadores_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`idUsuario`);
+
+ALTER TABLE `pratos`
+  ADD CONSTRAINT `pratos_ibfk_1` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`idRestaurante`);
+
+ALTER TABLE `cardapio`
+  ADD CONSTRAINT `cardapio_ibfk_1` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`idRestaurante`),
+  ADD CONSTRAINT `cardapio_ibfk_2` FOREIGN KEY (`produto_id`) REFERENCES `produtos_predefinidos` (`idProduto`);
+
+ALTER TABLE `pedidos`
+  ADD CONSTRAINT `pedidos_ibfk_1` FOREIGN KEY (`cliente_id`) REFERENCES `usuarios` (`idUsuario`),
+  ADD CONSTRAINT `pedidos_ibfk_2` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`idRestaurante`),
+  ADD CONSTRAINT `pedidos_ibfk_3` FOREIGN KEY (`entregador_id`) REFERENCES `entregadores` (`idEntregador`);
+
+ALTER TABLE `itens_pedido`
+  ADD CONSTRAINT `itens_pedido_ibfk_1` FOREIGN KEY (`pedido_id`) REFERENCES `pedidos` (`idPedido`),
+  ADD CONSTRAINT `itens_pedido_ibfk_2` FOREIGN KEY (`prato_id`) REFERENCES `pratos` (`idPrato`);
+
+ALTER TABLE `avaliacoes`
+  ADD CONSTRAINT `avaliacoes_ibfk_1` FOREIGN KEY (`pedido_id`) REFERENCES `pedidos` (`idPedido`),
+  ADD CONSTRAINT `avaliacoes_ibfk_2` FOREIGN KEY (`cliente_id`) REFERENCES `usuarios` (`idUsuario`),
+  ADD CONSTRAINT `avaliacoes_ibfk_3` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`idRestaurante`);
+
+-- Inserir dados iniciais nas categorias
+INSERT INTO `categorias` (`idCategoria`, `nome`, `nicho`) VALUES
+(1, 'Pizzas Salgadas', 'pizzaria'),
+(2, 'Pizzas Doces', 'pizzaria'),
+(3, 'Bebidas', 'pizzaria'),
+(4, 'Promoções', 'pizzaria'),
+(5, 'Hambúrgueres', 'hamburgueria'),
+(6, 'Acompanhamentos', 'hamburgueria'),
+(7, 'Bebidas', 'hamburgueria'),
+(8, 'Combos', 'hamburgueria'),
+(9, 'Sorvetes', 'sorveteria'),
+(10, 'Casquinhas', 'sorveteria'),
+(11, 'Milkshakes', 'sorveteria'),
+(12, 'Açaí', 'sorveteria'),
+(13, 'Lanches', 'lanchonete'),
+(14, 'Porções', 'lanchonete'),
+(15, 'Bebidas', 'lanchonete'),
+(16, 'Sobremesas', 'lanchonete');
+
+-- Inserir produtos predefinidos
+INSERT INTO `produtos_predefinidos` (`idProduto`, `categoria_id`, `nome`, `descricao`, `preco`, `nicho`) VALUES
+(1, 1, 'Pizza Margherita', 'Molho de tomate, muçarela, manjericão fresco', 45.90, 'pizzaria'),
+(2, 1, 'Pizza Calabresa', 'Calabresa fatiada, cebola, azeitonas', 49.90, 'pizzaria'),
+(3, 1, 'Pizza Portuguesa', 'Presunto, muçarela, ovos, cebola, azeitonas', 52.90, 'pizzaria'),
+(4, 1, 'Pizza Quatro Queijos', 'Muçarela, provolone, parmesão, gorgonzola', 55.90, 'pizzaria'),
+(5, 1, 'Pizza Frango com Catupiry', 'Frango desfiado, catupiry, milho', 51.90, 'pizzaria'),
+(6, 2, 'Pizza Romeu e Julieta', 'Goiabada, muçarela', 48.90, 'pizzaria'),
+(7, 2, 'Pizza Chocolate com Morango', 'Chocolate, morangos frescos', 56.90, 'pizzaria'),
+(8, 2, 'Pizza Banana com Canela', 'Banana, canela, açúcar', 44.90, 'pizzaria'),
+(9, 5, 'Burger Clássico', 'Pão, hambúrguer 180g, queijo, alface, tomate', 24.90, 'hamburgueria'),
+(10, 5, 'Burger Bacon', 'Hambúrguer 180g, queijo, bacon crocante', 29.90, 'hamburgueria'),
+(11, 5, 'Burger Duplo', 'Dois hambúrgueres, queijo, bacon, alface', 38.90, 'hamburgueria'),
+(12, 5, 'Burger Vegetariano', 'Hambúrguer de grão de bico, vegetais frescos', 26.90, 'hamburgueria'),
+(13, 6, 'Batata Frita', 'Porção de batata frita crocante', 12.90, 'hamburgueria'),
+(14, 6, 'Onion Rings', 'Anéis de cebola empanados', 14.90, 'hamburgueria'),
+(15, 6, 'Nuggets', '10 unidades de nuggets de frango', 16.90, 'hamburgueria'),
+(16, 9, 'Sorvete de Chocolate', 'Copo de 500ml', 18.90, 'sorveteria'),
+(17, 9, 'Sorvete de Morango', 'Copo de 500ml', 18.90, 'sorveteria'),
+(18, 9, 'Sorvete de Baunilha', 'Copo de 500ml', 18.90, 'sorveteria'),
+(19, 3, 'Coca-Cola 2L', 'Refrigerante Coca-Cola 2 litros', 12.90, 'pizzaria'),
+(20, 7, 'Coca-Cola Lata', 'Refrigerante Coca-Cola lata 350ml', 6.90, 'hamburgueria'),
+(21, 11, 'Suco Natural', 'Suco natural de laranja 500ml', 8.90, 'lanchonete');
+
+-- Inserir usuários de exemplo
+INSERT IGNORE INTO usuarios (nome, email, senha, tipo) VALUES 
+('João Cliente', 'joao@email.com', '$2y$10$hashedpassword1', 'cliente'),
+('Maria Cliente', 'maria@email.com', '$2y$10$hashedpassword2', 'cliente'),
+('Carlos Entregador', 'carlos@email.com', '$2y$10$hashedpassword3', 'entregador'),
+('Pizzaria Napoli', 'napoli@email.com', '$2y$10$hashedpassword4', 'restaurante'),
+('Burger House', 'burger@email.com', '$2y$10$hashedpassword5', 'restaurante');
